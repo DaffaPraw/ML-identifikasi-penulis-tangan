@@ -1,0 +1,27 @@
+# Bobot model: 45 MB per fold, ambil dari Drive (lihat README)
+model/*.pt
+model/*.pth
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Dataset dan hasil eksperimen tidak masuk repo
+dataset_clean/
+dataset clean/
+hasil/
+*.npz
+
+# Sertifikat sementara untuk --cert=adhoc
+*.pem
+*.crt
+*.key
+
+# OS dan editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
