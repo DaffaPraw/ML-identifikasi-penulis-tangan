@@ -72,6 +72,11 @@ operasi PyTorch melepas GIL. `torch.set_num_threads(2)` sudah diset di
 | `meta.json` | 50 nama kelas urut `label_id`, ukuran input, normalisasi, ambang |
 | `contoh/` | 3 crop per penulis untuk panel pembanding (820 KB) |
 | `templates/`, `static/` | Halaman, CSS, JS kamera |
+| `Klasifikasi_Tulisan_Tangan.ipynb` | Notebook UAS yang menghasilkan bobot model (berisi output) |
+
+Notebook disertakan sebagai asal-usul model: di situlah split data, ekstraksi
+GLCM, dan pelatihan ResNet18 serta SqueezeNet dilakukan. Datasetnya sendiri
+(81 MB) tidak masuk repo.
 
 ## Endpoint
 
