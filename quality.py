@@ -9,8 +9,10 @@ MIN_LEBAR = 120
 MIN_TINGGI = 16
 MIN_KETAJAMAN = 40.0
 MIN_KONTRAS = 12.0
-RASIO_TINTA_MIN = 0.004
-RASIO_TINTA_MAX = 0.60
+# Batas diukur dari dataset: rasio tinta tertinggi 0,613 dan terendah 0,0017,
+# jadi ambangnya diberi kelonggaran supaya gambar yang sah tidak ikut ditolak.
+RASIO_TINTA_MIN = 0.0015
+RASIO_TINTA_MAX = 0.75
 
 
 def _varians_laplacian(a):

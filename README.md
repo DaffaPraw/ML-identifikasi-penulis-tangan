@@ -30,6 +30,9 @@ keyakinan. Tanpa bobot, halaman tetap terbuka tetapi menampilkan peringatan.
 Bobot harus dari notebook yang **baru** (50 kelas, input 128 x 1024).
 `model_ResNet18.pt` dari arsip lama tidak kompatibel: 49 kelas, input 384 x 64.
 
+Tanpa akses ke Drive, bobot bisa dilatih sendiri di CPU dalam sekitar 15 menit —
+lihat bagian "Melatih sendiri tanpa Colab" di bawah.
+
 ## Jalankan
 
 ```
@@ -68,6 +71,7 @@ operasi PyTorch melepas GIL. `torch.set_num_threads(2)` sudah diset di
 | `model_service.py` | Muat model, preprocessing, prediksi, Grad-CAM |
 | `quality.py` | Gerbang mutu: ukuran, kontras, ketajaman, rasio tinta |
 | `segment.py` | Potong baris dengan projection profile |
+| `latih_lokal.py` | Melatih ulang satu fold di CPU, tanpa Colab |
 | `kalibrasi_ambang.py` | Menghitung ambang "tidak dikenal" dari test set |
 | `meta.json` | 50 nama kelas urut `label_id`, ukuran input, normalisasi, ambang |
 | `contoh/` | 3 crop per penulis untuk panel pembanding (820 KB) |
@@ -100,7 +104,7 @@ setiap prediksi jadi 2-3 kali lebih lambat padahal heatmap jarang dibuka.
 
 1. Decode + `exif_transpose` (foto ponsel sering tersimpan berotasi)
 2. Gerbang mutu — tolak dengan pesan spesifik, bukan "gagal"
-3. Potong baris kalau terdeteksi lebih dari satu band tulisan
+3. Potong baris, **hanya jika diminta** (checkbox "foto satu halaman penuh")
 4. Resize tinggi 128 px (rasio dijaga), pad putih sampai 1024 px
 5. 3 channel, normalisasi ImageNet
 6. Softmax, dirata-ratakan antar fold
@@ -109,17 +113,55 @@ setiap prediksi jadi 2-3 kali lebih lambat padahal heatmap jarang dibuka.
 Langkah 4 dan 5 **harus** sama dengan sel 5.2 notebook. Kalau berbeda, akurasi
 turun tanpa satu pun pesan error.
 
-## Kalibrasi ambang
+Langkah 3 mati secara default karena hasil pengukuran. Model dilatih pada gambar
+dataset **utuh** yang dimampatkan ke tinggi 128, bukan pada hasil potong satu
+baris, dan banyak gambar dataset memang berisi beberapa baris. Diuji pada 531
+gambar uji, memotong aktif di 265 di antaranya dan menurunkan akurasi dari
+**0,9849 ke 0,9454** — 23 gambar yang benar berubah jadi salah. Memotong baru
+masuk akal untuk foto satu halaman penuh, yang bentuknya memang jauh dari data
+latih.
 
-Nilai `ambang_keyakinan` di `meta.json` masih 0,55 — angka sementara, bukan hasil
-pengukuran. Setelah bobot tersedia:
+Batas gerbang mutu juga diukur dari dataset, bukan dikarang: rasio tinta di
+2.658 gambar berkisar 0,0017 sampai 0,613, jadi batasnya dipasang 0,0015 dan
+0,75 supaya gambar yang sah tidak ikut tertolak.
+
+## Melatih sendiri tanpa Colab
+
+Kalau bobot Colab tidak tersedia, satu fold bisa dilatih ulang di CPU:
 
 ```
-python kalibrasi_ambang.py --dataset "D:/dataset_clean" --split "D:/hasil/split_data.csv" --tulis
+python latih_lokal.py --dataset "../data_uas/dataset_clean" --fold 1
+```
+
+Split, preprocessing, dan hyperparameter-nya sama persis dengan notebook, jadi
+pembagian datanya identik (seed 42 → 532 uji, 426/425 per fold). Bobotnya tidak
+akan sama dengan hasil Colab karena RNG dan hardware berbeda.
+
+Hasil terukur di mesin 32 core: **15 menit**, berhenti di epoch 15 (terbaik
+epoch 10), dan pada test set Precision 0,9863 / Recall 0,9848 / Akurasi 0,9850 /
+F1 0,9848 — sebanding dengan 0,9812 milik fold 1 di Colab.
+
+Skrip juga menulis `hasil_lokal/split_data.csv` supaya kalibrasi ambang bisa
+langsung dijalankan.
+
+## Kalibrasi ambang
+
+```
+python kalibrasi_ambang.py --dataset "../data_uas/dataset_clean" --split "hasil_lokal/split_data.csv" --tulis
 ```
 
 Skrip mengukur sebaran keyakinan pada 532 gambar uji, mengambil persentil bawah
 dari prediksi yang benar, lalu melaporkan berapa prediksi salah yang tersaring.
+
+Hasil pada model hasil latih lokal: prediksi benar rata-rata 0,9632 (terendah
+0,2278), prediksi salah rata-rata 0,4502 (tertinggi 0,9360). Persentil 1 memberi
+ambang **0,4023**: 10 dari 532 gambar dijawab "tidak dikenal", dan 4 dari 8
+prediksi salah tersaring.
+
+Sebarannya tumpang tindih — ada prediksi salah dengan keyakinan 93,6% — jadi
+tidak ada ambang yang bisa menyaring semua kesalahan. Ambang ini juga khusus
+untuk bobot yang sedang dipakai; kalau bobotnya diganti, kalibrasi harus
+diulang.
 
 ## Batas yang perlu disebut di laporan
 

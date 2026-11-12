@@ -80,7 +80,7 @@ def ubah_ukuran_dan_pad(img):
 
 
 def ke_tensor(img_siap):
-    a = torch.from_numpy(np.asarray(img_siap, dtype=np.uint8)).float().div(255)
+    a = torch.from_numpy(np.array(img_siap, dtype=np.uint8)).float().div(255)
     x = a.unsqueeze(0).repeat(3, 1, 1)
     return ((x - MEAN) / STD).unsqueeze(0)
 

@@ -58,6 +58,7 @@ async function kirim(blob, url, tambahan) {
   el('hasil').innerHTML = '<p class="kosong">Memproses...</p>';
   const data = new FormData();
   data.append('image', blob, 'frame.jpg');
+  data.append('potong', el('potong').checked ? '1' : '0');
   if (tambahan) {
     Object.entries(tambahan).forEach(([k, v]) => data.append(k, v));
   }
@@ -148,6 +149,7 @@ async function tampilkanGradcam() {
   el('kotak-gradcam').innerHTML = '<p class="catatan">Menghitung...</p>';
   const data = new FormData();
   data.append('image', blobTerakhir, 'frame.jpg');
+  data.append('potong', el('potong').checked ? '1' : '0');
   if (labelTerakhir !== null) data.append('label_id', labelTerakhir);
   try {
     const jawab = await fetch('/api/gradcam', { method: 'POST', body: data });

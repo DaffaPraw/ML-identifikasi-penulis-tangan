@@ -94,6 +94,12 @@ select {
   border: 1px solid var(--garis-kuat); background: var(--kartu);
 }
 
+.opsi {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 14px; font-size: 13px; color: var(--teks-2); cursor: pointer;
+}
+.opsi input { margin: 0; }
+
 .kartu {
   background: var(--kartu); border: 1px solid var(--garis);
   border-radius: 12px; padding: 14px 16px;
@@ -121,7 +127,8 @@ select {
 
 .contoh { display: flex; gap: 8px; }
 .contoh img, .contoh .kotak-kosong {
-  flex: 1; height: 56px; object-fit: cover; border-radius: var(--radius);
+  flex: 1; min-width: 0; height: 56px; object-fit: cover;
+  border-radius: var(--radius);
   background: var(--bg); border: 1px solid var(--garis);
 }
 #kotak-gradcam img { width: 100%; border-radius: var(--radius); display: block; }

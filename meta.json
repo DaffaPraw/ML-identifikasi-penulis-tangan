@@ -68,6 +68,6 @@
       0.225
     ]
   },
-  "ambang_keyakinan": 0.55,
-  "catatan_ambang": "Nilai sementara. Jalankan kalibrasi_ambang.py memakai test set untuk angka yang benar."
+  "ambang_keyakinan": 0.4023,
+  "catatan_ambang": "Persentil 1.0 dari keyakinan prediksi benar pada 532 gambar uji."
 }

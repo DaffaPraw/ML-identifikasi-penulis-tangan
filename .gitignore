@@ -13,6 +13,7 @@ env/
 dataset_clean/
 dataset clean/
 hasil/
+hasil_lokal/
 *.npz
 
 # Sertifikat sementara untuk --cert=adhoc

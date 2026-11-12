@@ -20,6 +20,9 @@ from PIL import Image
 
 import model_service as ms
 
+# Kalibrasi adalah pekerjaan batch offline, bukan server: pakai semua core.
+torch.set_num_threads(os.cpu_count() or 4)
+
 
 def main():
     p = argparse.ArgumentParser()
