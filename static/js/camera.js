@@ -109,7 +109,7 @@ function renderPrediksi(h) {
     + '<p class="nama">' + esc(judul) + '</p>'
     + pita
     + '<p class="catatan" style="margin-top:8px">' + h.sepakat + ' dari ' + h.jumlah_model
-    + ' model sepakat' + (h.dipotong ? ' &middot; baris dipotong otomatis' : '') + '</p>'
+    + ' model sepakat' + (h.catatan ? ' &middot; ' + esc(h.catatan) : '') + '</p>'
     + '</div>'
     + '<div class="kartu"><p class="label">'
     + (dikenal ? 'Kandidat lain' : 'Kandidat terdekat') + '</p>'

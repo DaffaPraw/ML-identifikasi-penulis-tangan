@@ -103,17 +103,27 @@ setiap prediksi jadi 2-3 kali lebih lambat padahal heatmap jarang dibuka.
 ## Pipeline di server
 
 1. Decode + `exif_transpose` (foto ponsel sering tersimpan berotasi)
-2. Gerbang mutu — tolak dengan pesan spesifik, bukan "gagal"
-3. Potong baris, **hanya jika diminta** (checkbox "foto satu halaman penuh")
-4. Resize tinggi 128 px (rasio dijaga), pad putih sampai 1024 px
-5. 3 channel, normalisasi ImageNet
-6. Softmax, dirata-ratakan antar fold
-7. Di bawah `ambang_keyakinan` -> "tidak dikenal"
+2. Pangkas ke area tulisan, **otomatis, hanya untuk gambar sebesar foto kamera**
+3. Gerbang mutu — tolak dengan pesan spesifik, bukan "gagal"
+4. Potong baris, **hanya jika diminta** (checkbox "foto satu halaman penuh")
+5. Resize tinggi 128 px (rasio dijaga), pad putih sampai 1024 px
+6. 3 channel, normalisasi ImageNet
+7. Softmax, dirata-ratakan antar fold
+8. Di bawah `ambang_keyakinan` -> "tidak dikenal"
 
-Langkah 4 dan 5 **harus** sama dengan sel 5.2 notebook. Kalau berbeda, akurasi
+Langkah 5 dan 6 **harus** sama dengan sel 5.2 notebook. Kalau berbeda, akurasi
 turun tanpa satu pun pesan error.
 
-Langkah 3 mati secara default karena hasil pengukuran. Model dilatih pada gambar
+Langkah 2 ada karena foto kamera gagal total tanpa itu. Preprocessing memakai
+skala `min(128/tinggi, 1024/lebar)`, jadi foto potret 3000x4000 menyusut jadi
+96x128 px di kanvas 1024x128 dan tulisannya tinggal beberapa piksel. Diuji pada
+foto simulasi: tanpa pemangkasan 0 dari 25 benar, dengan pemangkasan 25 dari 25.
+Pemangkasan dibatasi gambar setinggi minimal 600 px dengan cakupan tinta di
+bawah 50%, supaya crop dataset tidak ikut tersentuh — memangkas crop dataset
+justru menurunkan akurasi dari 0,9850 ke 0,9398. Pada 532 gambar uji, aturan ini
+aktif di nol gambar dan akurasinya tetap 0,9850.
+
+Langkah 4 mati secara default karena hasil pengukuran. Model dilatih pada gambar
 dataset **utuh** yang dimampatkan ke tinggi 128, bukan pada hasil potong satu
 baris, dan banyak gambar dataset memang berisi beberapa baris. Diuji pada 531
 gambar uji, memotong aktif di 265 di antaranya dan menurunkan akurasi dari

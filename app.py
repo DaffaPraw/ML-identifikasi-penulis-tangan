@@ -46,23 +46,35 @@ def _minta_potong():
 
 
 def _siapkan(img, potong=False):
-    """Gerbang mutu, lalu potong baris HANYA jika diminta.
+    """Pangkas foto ke area tulisan, gerbang mutu, lalu potong baris bila diminta.
 
-    Model dilatih pada gambar utuh yang dimampatkan ke tinggi 128, bukan pada
-    hasil potong satu baris. Diukur pada 531 gambar uji, memotong selalu
-    menurunkan akurasi dari 0,9849 ke 0,9454. Jadi memotong hanya masuk akal
-    untuk foto satu halaman penuh, yang bentuknya memang jauh dari data latih.
+    Urutannya penting. Pemangkasan foto jalan lebih dulu supaya gerbang mutu
+    menilai area tulisannya, bukan hamparan kertas kosong di sekelilingnya.
+
+    Potong baris tetap opsional: model dilatih pada gambar utuh yang
+    dimampatkan ke tinggi 128, bukan pada hasil potong satu baris. Diukur pada
+    531 gambar uji, memotong menurunkan akurasi dari 0,9849 ke 0,9454.
     """
     a = np.asarray(img, dtype=np.uint8)
+    catatan = None
+
+    kotak = segment.kotak_tinta(a)
+    if kotak:
+        img = img.crop(kotak)
+        a = np.asarray(img, dtype=np.uint8)
+        catatan = 'foto dipangkas ke area tulisan'
+
     lolos, alasan = quality.periksa(a)
     if not lolos:
-        return None, False, alasan
-    if not potong:
-        return img, False, None
-    band = segment.baris_terbesar(a)
-    if band:
-        img = img.crop((0, band[0], img.width, band[1]))
-    return img, bool(band), None
+        return None, None, alasan
+
+    if potong:
+        band = segment.baris_terbesar(a)
+        if band:
+            img = img.crop((0, band[0], img.width, band[1]))
+            catatan = 'dipotong ke baris terbesar'
+
+    return img, catatan, None
 
 
 @app.get('/')
@@ -97,7 +109,7 @@ def predict():
     if img is None:
         return jsonify(ok=False, alasan='Tidak ada gambar yang dikirim.'), 400
 
-    img, dipotong, alasan = _siapkan(img, _minta_potong())
+    img, catatan, alasan = _siapkan(img, _minta_potong())
     if alasan:
         return jsonify(ok=False, alasan=alasan)
 
@@ -107,7 +119,7 @@ def predict():
         return jsonify(ok=False, alasan=str(galat)), 503
 
     hasil['ok'] = True
-    hasil['dipotong'] = dipotong
+    hasil['catatan'] = catatan
     hasil['ms'] = round((time.perf_counter() - mulai) * 1000, 1)
     hasil['input_png'] = 'data:image/png;base64,' + base64.b64encode(
         ms.png_dari(siap)).decode()
@@ -126,7 +138,7 @@ def verify():
     if img is None:
         return jsonify(ok=False, alasan='Tidak ada gambar yang dikirim.'), 400
 
-    img, dipotong, alasan = _siapkan(img, _minta_potong())
+    img, catatan, alasan = _siapkan(img, _minta_potong())
     if alasan:
         return jsonify(ok=False, alasan=alasan)
 
@@ -138,7 +150,7 @@ def verify():
         return jsonify(ok=False, alasan=str(galat)), 503
 
     hasil['ok'] = True
-    hasil['dipotong'] = dipotong
+    hasil['catatan'] = catatan
     hasil['input_png'] = 'data:image/png;base64,' + base64.b64encode(
         ms.png_dari(siap)).decode()
     hasil['contoh'] = _contoh_penulis(nama)
