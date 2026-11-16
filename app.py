@@ -1,14 +1,15 @@
 """Aplikasi web identifikasi penulis tulisan tangan.
 
-Kamera dipegang browser (getUserMedia), bukan server. Server hanya menerima
-satu frame JPEG per permintaan, lalu mengembalikan JSON.
+Dua halaman statis di folder `situs/` (halaman depan dan halaman alat) plus API
+JSON di bawah /api. Satu gambar per permintaan, diproses di memori: tidak ada
+berkas yang ditulis ke disk.
 """
 import base64
 import os
 import time
 
 import numpy as np
-from flask import Flask, abort, jsonify, render_template, request, send_from_directory
+from flask import Flask, abort, jsonify, request, send_from_directory
 
 import model_service as ms
 import quality
@@ -16,8 +17,10 @@ import segment
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 DIR_CONTOH = os.path.join(BASE, 'contoh')
+SITUS = os.path.join(BASE, 'situs')
+BERKAS_SITUS = ('.html', '.js', '.css', '.svg', '.jpg', '.png', '.ico', '.json', '.txt', '.webmanifest')
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder=None)
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
 
 
@@ -79,7 +82,25 @@ def _siapkan(img, potong=False):
 
 @app.get('/')
 def halaman():
-    return render_template('index.html', jumlah_penulis=len(ms.PENULIS))
+    return send_from_directory(SITUS, 'index.html')
+
+
+@app.get('/<berkas>')
+def berkas_situs(berkas):
+    """Halaman alat, skripnya, dan ikonnya: berkas datar di akar `situs/`."""
+    if not berkas.lower().endswith(BERKAS_SITUS):
+        abort(404)
+    return send_from_directory(SITUS, berkas)
+
+
+@app.get('/assets/<path:berkas>')
+def aset(berkas):
+    return send_from_directory(os.path.join(SITUS, 'assets'), berkas)
+
+
+@app.get('/img/<path:berkas>')
+def gambar_situs(berkas):
+    return send_from_directory(os.path.join(SITUS, 'img'), berkas)
 
 
 @app.get('/api/health')

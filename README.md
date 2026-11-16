@@ -1,26 +1,30 @@
-# Aplikasi identifikasi penulis tulisan tangan
+# Kenali Penulis — identifikasi penulis tulisan tangan
 
 Aplikasi web Flask yang menebak penulis dari satu baris tulisan tangan, memakai
-ResNet18 hasil UAS (50 penulis, akurasi uji 0,9808).
+ResNet18 hasil UAS (50 penulis, akurasi uji 0,9850).
 
-Kamera dipegang **browser** lewat `getUserMedia`, bukan server. Server hanya
-menerima satu frame JPEG per permintaan. Preview video jalan sepenuhnya di sisi
-klien, jadi tidak ada beban inferensi per frame.
+Dua halaman statis di `situs/` plus API JSON di bawah `/api`:
 
-## Pasang
+| Halaman | Isi |
+|---|---|
+| `situs/index.html` | Halaman depan: apa yang ditebak, tiga langkahnya, empat model yang dibandingkan, data latih, dan batas model |
+| `situs/alat.html` | Alat kerjanya: unggah satu gambar, periksa satu penulis, dan pertanyaan |
+
+Tidak ada kamera langsung. Gambar masuk lewat pemilih berkas atau dijatuhkan ke
+kotaknya, lalu dikirim sebagai satu permintaan multipart.
+
+## Pasang dan jalankan
 
 ```
 pip install -r requirements.txt
 ```
 
-Lalu salin bobot model dari Drive (`MyDrive/UAS_ML/hasil/`) ke folder `model/`:
+Bobot model di `model/`:
 
 ```
 model/resnet18_fold1.pt
 model/resnet18_fold2.pt      (opsional)
-model/resnet18_fold3.pt      (opsional)
-model/resnet18_fold4.pt      (opsional)
-model/resnet18_fold5.pt      (opsional)
+...
 ```
 
 Satu berkas sudah cukup. Kalau kelima ada, aplikasi memakai ensemble: softmax
@@ -30,28 +34,11 @@ keyakinan. Tanpa bobot, halaman tetap terbuka tetapi menampilkan peringatan.
 Bobot harus dari notebook yang **baru** (50 kelas, input 128 x 1024).
 `model_ResNet18.pt` dari arsip lama tidak kompatibel: 49 kelas, input 384 x 64.
 
-Tanpa akses ke Drive, bobot bisa dilatih sendiri di CPU dalam sekitar 15 menit —
-lihat bagian "Melatih sendiri tanpa Colab" di bawah.
-
-## Jalankan
-
 ```
 python app.py
 ```
 
 Buka `http://localhost:5000`.
-
-### Kamera dari ponsel
-
-`getUserMedia` hanya jalan di secure context. `http://192.168.x.x:5000` dari
-ponsel **tidak** akan membuka kamera. Pilih salah satu:
-
-```
-flask --app app run --host 0.0.0.0 --cert=adhoc
-```
-
-atau tunnel (`cloudflared tunnel --url http://localhost:5000`). Tab Unggah tetap
-berfungsi di HTTP biasa.
 
 ### Produksi
 
@@ -60,33 +47,52 @@ gunicorn -w 1 --threads 4 -b 0.0.0.0:5000 app:app
 ```
 
 Satu worker saja — tiap worker menduplikasi model di memori. Thread aman karena
-operasi PyTorch melepas GIL. `torch.set_num_threads(2)` sudah diset di
-`model_service.py`.
+operasi PyTorch melepas GIL dan `model_service._kunci` menjaga satu forward pass
+sekali waktu; tanpa kunci itu, hook Grad-CAM di `layer4` ikut kena permintaan
+lain dan `retain_grad()` gagal di bawah `no_grad`. `torch.set_num_threads(2)`
+sudah diset di `model_service.py`.
 
 ## Isi folder
 
 | Berkas | Keterangan |
 |---|---|
-| `app.py` | Route Flask saja |
+| `app.py` | Route Flask: dua halaman, API, dan berkas statis `situs/` |
 | `model_service.py` | Muat model, preprocessing, prediksi, Grad-CAM |
 | `quality.py` | Gerbang mutu: ukuran, kontras, ketajaman, rasio tinta |
-| `segment.py` | Potong baris dengan projection profile |
+| `segment.py` | Pangkas foto ke area tulisan, potong baris |
 | `latih_lokal.py` | Melatih ulang satu fold di CPU, tanpa Colab |
 | `kalibrasi_ambang.py` | Menghitung ambang "tidak dikenal" dari test set |
 | `meta.json` | 50 nama kelas urut `label_id`, ukuran input, normalisasi, ambang |
-| `contoh/` | 3 crop per penulis untuk panel pembanding (820 KB) |
-| `templates/`, `static/` | Halaman, CSS, JS kamera |
-| `Klasifikasi_Tulisan_Tangan.ipynb` | Notebook UAS yang menghasilkan bobot model (berisi output) |
+| `contoh/` | 3 crop per penulis untuk panel pembanding |
+| `situs/` | Halaman depan, halaman alat, `alat.js`, gambar, dan kit desain di `situs/assets/` |
+| `Klasifikasi_Tulisan_Tangan.ipynb` | Notebook UAS yang menghasilkan bobot model |
 
-Notebook disertakan sebagai asal-usul model: di situlah split data, ekstraksi
-GLCM, dan pelatihan ResNet18 serta SqueezeNet dilakukan. Datasetnya sendiri
-(81 MB) tidak masuk repo.
+Datasetnya sendiri (81 MB) tidak masuk repo.
+
+### Desainnya
+
+Halaman depan dibangun dengan skill `design-taste-frontend` (tasteskill 2.5.1).
+Hasil deal-nya ditulis di komentar atas `<body>` `situs/index.html` dan di
+`situs/rencana.md`: hero `collage`, nav `nav-mega`, close
+`close-type`, footer `footer-dark`, ritme `space`, tombol `arrow`, mark
+`wordmark`, palet `charcoal-room-sage`, pasangan huruf `suse`, efek
+`gradient-mesh` di frame hero, moment `pinned-chapters` di bagian "Cara".
+
+`situs/assets/` adalah kit skill itu yang sudah dipangkas ke bagian yang dipakai
+halaman ini (37 MB jadi 2,6 MB). Memeriksa ulang:
+
+```
+node <skill>/scripts/gate.mjs index.html
+```
+
+dari dalam `situs/`.
 
 ## Endpoint
 
 | Route | Method | Keterangan |
 |---|---|---|
-| `/` | GET | Halaman utama |
+| `/` | GET | Halaman depan |
+| `/alat.html` | GET | Halaman alat |
 | `/api/predict` | POST | Gambar -> top-5, keyakinan, flag `tidak_dikenal` |
 | `/api/verify` | POST | Gambar + `penulis` -> skor 1:1 |
 | `/api/gradcam` | POST | Gambar (+ `label_id`) -> PNG overlay |
@@ -95,7 +101,7 @@ GLCM, dan pelatihan ResNet18 serta SqueezeNet dilakukan. Datasetnya sendiri
 | `/contoh/<penulis>/<berkas>` | GET | Contoh tulisan penulis |
 
 Gambar dikirim sebagai multipart `image`, atau JSON `{"image": "data:image/jpeg;base64,..."}`.
-Batas unggahan 10 MB.
+Batas unggahan 10 MB. Gambar diproses di memori; tidak ada berkas yang ditulis ke disk.
 
 Grad-CAM dipisah dari `/api/predict` karena butuh backward pass. Kalau digabung,
 setiap prediksi jadi 2-3 kali lebih lambat padahal heatmap jarang dibuka.
@@ -105,7 +111,7 @@ setiap prediksi jadi 2-3 kali lebih lambat padahal heatmap jarang dibuka.
 1. Decode + `exif_transpose` (foto ponsel sering tersimpan berotasi)
 2. Pangkas ke area tulisan, **otomatis, hanya untuk gambar sebesar foto kamera**
 3. Gerbang mutu — tolak dengan pesan spesifik, bukan "gagal"
-4. Potong baris, **hanya jika diminta** (checkbox "foto satu halaman penuh")
+4. Potong baris, **hanya jika diminta** (centang "foto satu halaman penuh")
 5. Resize tinggi 128 px (rasio dijaga), pad putih sampai 1024 px
 6. 3 channel, normalisasi ImageNet
 7. Softmax, dirata-ratakan antar fold
@@ -136,8 +142,6 @@ Batas gerbang mutu juga diukur dari dataset, bukan dikarang: rasio tinta di
 0,75 supaya gambar yang sah tidak ikut tertolak.
 
 ## Melatih sendiri tanpa Colab
-
-Kalau bobot Colab tidak tersedia, satu fold bisa dilatih ulang di CPU:
 
 ```
 python latih_lokal.py --dataset "../data_uas/dataset_clean" --fold 1
@@ -173,6 +177,17 @@ tidak ada ambang yang bisa menyaring semua kesalahan. Ambang ini juga khusus
 untuk bobot yang sedang dipakai; kalau bobotnya diganti, kalibrasi harus
 diulang.
 
+## Perbandingan model (notebook UAS)
+
+Rata-rata lima eksperimen pada test set yang sama:
+
+| Model | Akurasi | F1 | Waktu latih |
+|---|---|---|---|
+| ResNet18 | 0,9808 | 0,9807 | 316 detik |
+| SqueezeNet 1.1 | 0,9398 | 0,9391 | 249 detik |
+| LDA + GLCM | 0,8944 | 0,8930 | 0,07 detik |
+| Gaussian NB + GLCM | 0,3338 | 0,2983 | 0,004 detik |
+
 ## Batas yang perlu disebut di laporan
 
 - **Closed set.** Model hanya tahu 50 penulis ini. Tulisan orang lain akan
@@ -184,3 +199,6 @@ diulang.
   yang tajam dan berkontras. Penyaring akhir untuk kasus seperti itu adalah
   ambang keyakinan.
 - Aplikasi tidak membaca isi tulisan. Itu tugas OCR, model lain.
+- Recall terendah per penulis: A250040, 0,820.
+- `contoh/` berisi 150 crop tulisan tangan asli berlabel NIM. Repo ini privat
+  justru karena itu.

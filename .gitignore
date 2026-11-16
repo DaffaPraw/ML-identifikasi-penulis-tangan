@@ -26,3 +26,7 @@ hasil_lokal/
 Thumbs.db
 .idea/
 .vscode/
+
+# Kit desain: jejak pemeriksa (profil Chrome, crop, screenshot) — bukan sumber
+situs/.taste-skill/
+situs/shots/

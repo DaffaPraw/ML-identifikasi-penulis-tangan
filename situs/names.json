@@ -1,0 +1,7 @@
+{
+  "name": "Kenali Penulis",
+  "coined": false,
+  "note": "Frasa Indonesia biasa (kenali + penulis), bukan nama karangan: dipilih karena nama panjang 'Identifikasi Penulis' (20 karakter) tidak muat di bar nav pada 320 px, dan kit meminta nama 15 karakter atau kurang.",
+  "searched": false,
+  "why_not_searched": "copy.md meminta pencarian untuk nama yang dikarang; ini nama deskriptif untuk tugas kuliah, bukan merek."
+}

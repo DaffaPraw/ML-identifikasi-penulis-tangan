@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="id" data-type="software" data-radius="soft" data-ground="sage" data-buttons="arrow" data-motion>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kenali Penulis: menebak penulis dari satu baris tulisan tangan</title>
+<meta name="description" content="Alat yang membandingkan satu baris tulisan tangan dengan 50 penulis terdaftar, lalu menyebut penulis teratas beserta angka keyakinannya.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Kenali Penulis: menebak penulis dari satu baris tulisan tangan">
+<meta property="og:description" content="ResNet18 pada 50 penulis terdaftar. Akurasi 98,5% pada 532 gambar uji.">
+<meta property="og:image" content="share.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#1c1c1c">
+<!-- <link rel="canonical" href="https://[domain]/"> -->
+<meta name="site-kind" content="software">
+<meta name="page-type" content="software">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=SUSE:wght@400..700&family=JetBrains+Mono:wght@400..500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/system.css">
+<link rel="stylesheet" href="assets/ui/cards.css">
+<link rel="stylesheet" href="assets/motion/motion.css">
+<link rel="stylesheet" href="assets/backgrounds/backgrounds.css">
+<link rel="stylesheet" href="assets/layout/layout.css">
+<link rel="stylesheet" href="assets/icons/icon.css">
+<style>
+:root {
+  --p-bg: #1c1c1c; --p-surface: #262626; --p-ink: #f1f1ef; --p-muted: #9a9b96;
+  --p-accent: #8fa68e; --p-accent-ink: #1c1c1c; --p-action: #8fa68e; --p-action-ink: #1c1c1c;
+  --p-inv-bg: #c8c5ba; --p-inv-surface: #bab8ae; --p-inv-ink: #1c1c1c; --p-inv-muted: #454442;
+  --p-inv-accent: #1c1c1c; --p-inv-accent-ink: #c8c5ba; --p-inv-action: #1c1c1c; --p-inv-action-ink: #c8c5ba;
+  --font-display: "SUSE", system-ui, sans-serif;
+  --font-text: "SUSE", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --display-weight: 500;
+  --display-tracking: -0.03em;
+  --display-tracking-xl: -0.04em;
+}
+
+/* grade terang: palet saudara dari charcoal-room-sage, aksennya sage yang digelapkan
+   sampai labelnya lolos 4,5:1 dan warnanya sendiri lolos 3:1 di atas kedua tanah.
+   Tanah inversnya jadi gelap, jadi footer--dark tetap slab gelap di kedua mode. */
+:root[data-grade="light"] {
+  --p-bg: #f4f3ef; --p-surface: #e8e7e1; --p-ink: #1c1c1c; --p-muted: #5a5c56;
+  --p-accent: #3f6b3c; --p-accent-ink: #ffffff; --p-action: #3f6b3c; --p-action-ink: #ffffff;
+  --p-inv-bg: #1c1c1c; --p-inv-surface: #262626; --p-inv-ink: #f1f1ef; --p-inv-muted: #9a9b96;
+  --p-inv-accent: #8fa68e; --p-inv-accent-ink: #1c1c1c; --p-inv-action: #8fa68e; --p-inv-action-ink: #1c1c1c;
+}
+</style>
+<link rel="stylesheet" href="assets/ui/base.css">
+<link rel="stylesheet" href="assets/ui/window/fragment.css">
+<link rel="stylesheet" href="assets/diagrams/diagram.css">
+<script>document.documentElement.classList.add('m-enter');setTimeout(()=>document.documentElement.classList.add('m-enter-done'),700)</script>
+<script>
+/* Grade terang atau gelap: dipilih sekali saat muat atau lewat klik, tidak pernah oleh scroll
+   (system.md, Colour). system.js membaca data-tone dari palet saat muat, jadi tombol ini
+   menyetelnya sendiri setiap kali grade-nya ditukar. */
+(function () {
+  var kunci = 'kp-grade';
+  function pasang(g) {
+    var r = document.documentElement;
+    r.setAttribute('data-grade', g);
+    r.setAttribute('data-tone', g === 'light' ? 'light' : 'dark');
+    var m = document.querySelector('meta[name="theme-color"]');
+    if (m) m.setAttribute('content', g === 'light' ? '#f4f3ef' : '#1c1c1c');
+    var b = document.getElementById('grade');
+    if (b) {
+      b.setAttribute('aria-pressed', g === 'light' ? 'true' : 'false');
+      var t = b.querySelector('.grade__kata');
+      if (t) t.textContent = g === 'light' ? 'Mode gelap' : 'Mode terang';
+    }
+  }
+  var simpan;
+  try { simpan = localStorage.getItem(kunci); } catch (e) { /* mode privat */ }
+  pasang(simpan === 'light' ? 'light' : 'dark');
+  document.addEventListener('DOMContentLoaded', function () {
+    pasang(document.documentElement.getAttribute('data-grade') || 'dark');
+  });
+  document.addEventListener('click', function (ev) {
+    if (!ev.target.closest || !ev.target.closest('#grade')) return;
+    var g = document.documentElement.getAttribute('data-grade') === 'light' ? 'dark' : 'light';
+    pasang(g);
+    try { localStorage.setItem(kunci, g); } catch (e) { /* mode privat */ }
+  });
+}());
+</script>
+<script src="assets/backgrounds/backgrounds.js"></script>
+<script>document.documentElement.classList.add('mo-js');setTimeout(()=>document.documentElement.classList.add('mo-safe'),2500)</script>
+<link rel="modulepreload" href="assets/moments/moments.js">
+<link rel="modulepreload" href="assets/moments/lib.js">
+<link rel="modulepreload" href="assets/moments/pinned-chapters/moment.js">
+<style>
+
+/* the grade switch wears the nav's plain-word look (system.md, Nav: a second action is a plain
+   word); a <button> needs the browser's own chrome taken off to wear it */
+/* a class, not an id: below 1024 the kit hides every nav action but the main button, and an id rule
+   would outrank that hide and push the bar past the screen */
+.grade-btn { display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; font: inherit; color: inherit; cursor: pointer; }
+.grade-btn .grade__ic { opacity: .8; }
+/* page CSS: only what sits inside a visual (layout-v4.md section 2) */
+
+/* the nav panel's one picture: a Grad-CAM strip is 8:1, so it stands whole on the lit ground */
+.menu-card .panel > img { object-fit: contain; padding: var(--s-4); background: var(--ground-surface); }
+
+/* the one lit sheet of product UI left on the page: white on the sage ground of #batas's frame, so
+   a screen reads as a screen and not as part of the ground */
+#batas .frame--lit {
+  --fx-bg: #ffffff; --fx-surface: #f1f2ef; --fx-ink: #1b1d1a; --fx-muted: #5c6159;
+  --fx-accent: #4a6f43; --fx-accent-ink: #ffffff;
+}
+
+/* the app frame's window: a crop of the line, the penulis it answered, the berkas, the state and the
+   keyakinan, so the last column is wider than the kit's 28px age slot */
+.ui-win__cols, .ui-win__row { grid-template-columns: 48px 92px minmax(0, 1fr) 96px 60px; }
+.ui-win__row > img.ui-avatar { width: 48px; height: 26px; border-radius: 4px; background: #ffffff; object-fit: cover; object-position: left center; box-shadow: inset 0 0 0 1px var(--u-line-2); }
+/* the app frame stacks below 1024: its list pane is 252px, which holds its bar, its column heads and
+   four whole rows (sections-library.md, app-frame) */
+@media (max-width: 1023px) { #baca .ui-win__row:nth-child(n+5) { display: none; } }
+
+/* the result sheet: the client's own screen, in the hero card, the app frame and #batas */
+.rs { overflow: hidden; }
+.rs__head { display: flex; align-items: center; gap: var(--s-2); height: 44px; padding: 0 16px; border-bottom: 1px solid var(--u-line); }
+.rs__head .ui-title { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rs__body { display: grid; gap: 12px; padding: 16px; }
+.rs__shot { border-radius: var(--u-r3); overflow: hidden; background: #ffffff; box-shadow: inset 0 0 0 1px var(--u-line-2); }
+.rs__shot > img { width: 100%; height: auto; }
+.rs__top { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.rs__name { font-family: var(--ui-mono); font-size: 22px; line-height: 28px; font-weight: 500; letter-spacing: -0.02em; }
+.rs__pct { font-size: 13px; color: var(--u-muted); }
+.rs__rows { display: grid; gap: 7px; }
+.rs__row { display: grid; grid-template-columns: 72px minmax(0, 1fr) 52px; align-items: center; gap: 10px; font-size: 13px; }
+.rs__row > span:first-child { font-family: var(--ui-mono); color: var(--u-text-2); }
+.rs__row > span:last-child { text-align: right; color: var(--u-muted); font-variant-numeric: tabular-nums; }
+.rs__bar { height: 8px; border-radius: 99px; background: var(--u-fill-2); overflow: hidden; }
+.rs__bar > i { display: block; height: 100%; border-radius: 99px; background: var(--u-fill-3); width: var(--v, 2%); }
+.rs__row:first-child .rs__bar > i { background: var(--u-accent); }
+.rs__note { display: flex; align-items: center; gap: 10px; padding: 7px 0; font-size: 13px; color: var(--u-text-2); border-top: 1px solid var(--u-line); }
+.rs__note i { width: 18px; height: 18px; border-radius: 50%; flex: none; display: grid; place-items: center; background: var(--u-tint); color: var(--u-accent-text); font-style: normal; font-size: 12px; font-weight: 500; }
+.rs__note b { font-weight: 500; color: var(--u-ink); }
+.rs__steps { display: grid; padding: 4px 16px 14px; }
+.rs__steps > .rs__note:first-child { border-top: 0; }
+
+/* app-frame (sections-library.md): the window is the frame, its two panes are its columns */
+.app.ui { --fx-bg: var(--surface); display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); margin-top: var(--s-7); background: var(--u-bg); border: 1px solid var(--u-border); border-radius: var(--u-r); box-shadow: var(--u-shadow); }
+.app > .app__pane { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+.app > .app__pane + .app__pane { border-left: 1px solid var(--u-line); }
+.app > .app__pane > .ui-panel { width: 100%; border: 0; border-radius: 0; box-shadow: none; }
+.app > .app__pane::after { content: ""; position: absolute; inset: auto 0 0 0; height: 64px; background: linear-gradient(transparent, var(--u-bg)); pointer-events: none; }
+@media (min-width: 1024px) and (max-width: 1279px) { .app.ui { grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); } }
+@media (max-width: 1023px) {
+  .app.ui { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .app > .app__pane--list { max-height: 252px; }
+  .app > .app__pane--list::after { display: none; }
+  .app .ui-win__side { display: none; }
+  .app .ui-win__body { grid-template-columns: minmax(0, 1fr); }
+  .app > .app__pane + .app__pane { border-left: 0; border-top: 1px solid var(--u-line); }
+}
+@media (max-width: 639px) {
+  .app.ui { grid-template-rows: minmax(0, 1fr); }
+  .app > .app__pane--list { display: none; }
+  .app > .app__pane + .app__pane { border-top: 0; }
+}
+
+/* #cara: each chapter's picture is a strip the model works on, so it stands left-aligned on white
+   inside the lit frame, exactly as the 1024 x 128 canvas holds it */
+[data-moment="pinned-chapters"] .shot { width: 100%; border-radius: var(--r-md); overflow: hidden; background: #ffffff; box-shadow: 0 0 0 1px rgb(0 0 0 / .09), 0 24px 60px -28px rgb(0 0 0 / .45); }
+[data-moment="pinned-chapters"] .shot__bar { display: flex; align-items: center; height: 32px; padding: 0 12px; border-bottom: 1px solid rgb(0 0 0 / .08); font: 400 13px/1.4 var(--font-mono); color: #3d423c; }
+[data-moment="pinned-chapters"] .shot > img { width: 100%; height: auto; }
+/* the one page-CSS rule on a section (layout-v4.md section 2): at rest the moment's own stylesheet
+   sets height:auto on its section, which on a phone lands it between one screen and two and lets the
+   next section into its tile. Its stacked content fills two phone screens, so that is the height the
+   system would give it; the lit panels grow to take up the slack. */
+@media (max-width: 639px) {
+  main > #cara[data-moment]:not(.is-live) { --hm: 2; min-height: calc(var(--hm) * 100lvh); }
+  #cara .mo-pc__visual.mo-pc__visual--lit { aspect-ratio: 1 / 1; }
+}
+/* the tablet lays the three chapters out as rows, so each lit panel is a letterbox of its strip and
+   the three of them stay inside the section's one screen */
+@media (min-width: 640px) and (max-width: 1023px) {
+  #cara .mo-pc__visual.mo-pc__visual--lit { aspect-ratio: 2 / 1; }
+  #cara .shot > img { height: 64px; object-fit: contain; object-position: left center; }
+}
+
+/* a phone gives the lit frame its own 16:9 box instead of the height the section leaves, so the
+   section grows with what it holds at 320 and still ends on a whole screen at 390 */
+@media (max-width: 639px) { #hasil .frame--fill, #batas .frame--fill { height: auto; min-height: 0; aspect-ratio: 16 / 9; } }
+/* live, the moment's stage centres its row in the screen, which leaves its h2 far below --padt and a
+   gap to the sections either side; top-aligned it starts where every other section's h2 starts
+   (layout-v4.md section 2, Top-aligned) */
+@media (min-width: 1024px) {
+  #cara.is-live > .mo-pc__grid { align-content: start; padding-top: var(--padt); }
+  #cara.is-live .mo-pc__visuals { aspect-ratio: auto; height: 100%; }
+}
+
+/* #hasil: the diagram takes the frame that the section's height leaves. diagram.js reads --card for
+   the face of its nodes; on a lit frame of a dark page that token is still the page's dark card, so
+   the core pill would come out dark on dark. */
+.frame--lit { --card: var(--ground-surface); }
+.frame--lit > .dg { width: 100%; height: 100%; }
+
+/* #data: the crops share what the section's height leaves, each on its own white canvas */
+.strip { display: grid; gap: 2px; grid-auto-rows: 1fr; }
+.strip > img { width: 100%; height: 100%; object-fit: contain; object-position: left center; background: #ffffff; }
+</style>
+</head>
+<body>
+<!-- type: software (site-kind software)
+     deal: hero collage, nav nav-mega, close close-type, footer footer-dark, rhythm space,
+           buttons arrow, mark wordmark, palette charcoal-room-sage, type suse, radius soft,
+           hero statement on the dealt bg-dusk ground; no effect (the dealt gradient-mesh sat in the
+           collage hero's art frame, which the client asked to drop)
+     moments: pinned-chapters (#cara). counter-rolls was dealt too and is not built: the page came to
+              seven sections, under the eight that a second moment needs (moments.md).
+     The plan in screens: .taste-skill/rencana.md -->
+
+<header class="nav">
+  <div class="wrap nav__bar">
+    <a class="skip-link" href="#top">Lewati ke isi</a>
+    <a class="nav__logo" href="#top">Kenali Penulis</a>
+    <nav class="nav__links" aria-label="Utama">
+      <div class="nav__item"><a class="nav__link" href="#baca">Prediksi</a></div>
+      <div class="nav__item"><a class="nav__link" href="#cara">Cara</a></div>
+      <div class="nav__item">
+        <a class="nav__link" href="#hasil">Hasil <svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+        <div class="nav__menu">
+          <div class="wrap grid">
+            <div class="menu-col span-3">
+              <p class="t-label">Angka</p>
+              <a href="#hasil">Empat model<span>Akurasi pada 532 gambar uji</span></a>
+              <a href="#data">Data latih<span>2.658 crop dari 50 penulis</span></a>
+            </div>
+            <div class="menu-col span-3">
+              <p class="t-label">Ketelitian</p>
+              <a href="#batas">Batas model<span>Hanya 50 penulis terdaftar</span></a>
+              <a href="alat.html">Pertanyaan<span>Format, ambang, foto ponsel</span></a>
+            </div>
+            <a class="menu-card span-3 start-10" href="#cara">
+              <div class="panel"><img class="frame__img" src="img/gradcam-A220199.png" alt="Peta Grad-CAM di atas satu baris tulisan tangan" width="1024" height="128"></div>
+              <span class="t-card">Peta Grad-CAM</span>
+              <span class="t-small muted">Bagian baris yang dibaca model</span>
+            </a>
+          </div>
+        </div>
+      </div>
+      <div class="nav__item"><a class="nav__link" href="#batas">Batas</a></div>
+    </nav>
+    <div class="nav__actions">
+      <button class="nav__link grade-btn" type="button" id="grade" aria-pressed="false">
+        <svg class="grade__ic" viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="8" cy="8" r="3.1"/><path d="M8 1.4v1.6M8 13v1.6M1.4 8h1.6M13 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M12.6 3.4l-1.1 1.1M4.5 11.5l-1.1 1.1"/></svg>
+        <span class="grade__kata">Mode terang</span>
+      </button>
+      <a class="btn btn--primary" href="alat.html">Unggah tulisan<svg class="m-arrow" viewBox="0 0 12 12" aria-hidden="true"><path class="m-arrow__stem" d="M1 6h8"/><path class="m-arrow__head" d="M4.5 2.5 8 6l-3.5 3.5"/></svg></a>
+    </div>
+    <button class="nav__toggle" type="button" aria-expanded="false" aria-label="Menu">
+      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2 5h14M2 13h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero hero--statement bg-dusk" data-enter aria-labelledby="hero-h">
+    <div class="wrap"><div class="hero-text hero__in">
+      <div>
+        <h1 id="hero-h">Identifikasi penulis dari satu baris tulisan</h1>
+        <p class="hero__lead">Unggah satu baris tulisan tangan, lalu ResNet18 membandingkannya dengan 50 penulis terdaftar dan menyebut yang teratas beserta angka keyakinannya.</p>
+        <div class="btn-row">
+          <a class="btn btn--primary" href="alat.html">Unggah tulisan<svg class="m-arrow" viewBox="0 0 12 12" aria-hidden="true"><path class="m-arrow__stem" d="M1 6h8"/><path class="m-arrow__head" d="M4.5 2.5 8 6l-3.5 3.5"/></svg></a>
+          <a class="btn btn--secondary" href="#hasil">Lihat angkanya</a>
+        </div>
+      </div>
+      <dl class="hero__facts">
+        <div><dt>Penulis terdaftar</dt><dd>50</dd></div>
+        <div><dt>Crop latih</dt><dd>2.658</dd></div>
+        <div><dt>Gambar uji</dt><dd>532</dd></div>
+        <div><dt>Akurasi</dt><dd>0,9850</dd></div>
+      </dl>
+    </div></div>
+  </section>
+
+  <section class="section" id="baca" aria-labelledby="baca-h">
+    <div class="wrap">
+      <div class="grid grid--top">
+        <h2 class="span-5" id="baca-h">Daftar gambar dan penulis yang dijawab</h2>
+        <div class="span-6 start-7 stack-4">
+          <p>Kolom kiri memuat gambar yang sudah dijalankan: potongan barisnya, kode penulis yang dijawab, dan keyakinannya. Kolom kanan membuka satu gambar: lima kandidat teratas dan peta bagian yang dibaca model.</p>
+          <a class="link" href="alat.html">Coba dengan gambar sendiri</a>
+        </div>
+      </div>
+      <div class="ui app fill" role="img" aria-label="Jendela aplikasi: antrean dua belas gambar dengan kode penulis dan keyakinannya di kiri, hasil satu gambar dengan lima kandidat teratas di kanan" data-ui-pause-host>
+        <div class="app__pane app__pane--list" data-ui-loop>
+          <div class="ui ui-panel ui-win" data-ui="window" data-open="Dibuka" data-work="Diproses" data-done="Selesai">
+            <div class="ui-win__bar">
+              <span class="ui-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+              <span class="ui-win__crumb">Antrean <i>/</i> <b>12 gambar</b></span>
+              <span class="ui-spacer"></span>
+            </div>
+            <div class="ui-win__body">
+              <nav class="ui-win__side">
+                <span class="ui-win__nav is-on">Antrean<em>12</em></span>
+                <span class="ui-win__nav">Selesai<em>7</em></span>
+                <span class="ui-win__nav">Tidak dikenal</span>
+                <span class="ui-win__label">Model</span>
+                <span class="ui-win__nav"><span class="ui-win__hash">#</span>ResNet18</span>
+                <span class="ui-win__nav"><span class="ui-win__hash">#</span>Fold 1</span>
+              </nav>
+              <div class="ui-win__main">
+                <div class="ui-win__cols"><span>Penulis</span><span>Berkas</span><span>Status</span><span>Keyakinan</span></div>
+                <ul class="ui-win__rows">
+                  <li class="ui-win__row" data-row><img class="ui-avatar" src="img/t-A240089.jpg" alt="" width="1024" height="73"><span class="ui-win__who">A240089</span><span class="ui-win__sub">A240089/3.jpg</span><span class="ui-win__st" data-st>Dibuka</span><span class="ui-win__age">99,7%</span></li>
+                  <li class="ui-win__row" data-row><img class="ui-avatar" src="img/t-A220199.jpg" alt="" width="390" height="128"><span class="ui-win__who">A220199</span><span class="ui-win__sub">A220199/1.jpg</span><span class="ui-win__st" data-st>Dibuka</span><span class="ui-win__age">99,6%</span></li>
+                  <li class="ui-win__row" data-row><img class="ui-avatar" src="img/t-A250023.jpg" alt="" width="500" height="128"><span class="ui-win__who">A250023</span><span class="ui-win__sub">A250023/3.jpg</span><span class="ui-win__st" data-st>Dibuka</span><span class="ui-win__age">99,5%</span></li>
+                  <li class="ui-win__row" data-row><img class="ui-avatar" src="img/t-A240029.jpg" alt="" width="1024" height="50"><span class="ui-win__who">A240029</span><span class="ui-win__sub">A240029/1.jpg</span><span class="ui-win__st" data-st>Dibuka</span><span class="ui-win__age">99,4%</span></li>
+                  <li class="ui-win__row" data-row><img class="ui-avatar" src="img/t-A240037.jpg" alt="" width="1024" height="94"><span class="ui-win__who">A240037</span><span class="ui-win__sub">A240037/1.jpg</span><span class="ui-win__st" data-st>Dibuka</span><span class="ui-win__age">99,8%</span></li>
+                  <li class="ui-win__row" data-row><img class="ui-avatar" src="img/t-A250001.jpg" alt="" width="1024" height="58"><span class="ui-win__who">A250001</span><span class="ui-win__sub">A250001/1.jpg</span><span class="ui-win__st is-done" data-st>Selesai</span><span class="ui-win__age">99,7%</span></li>
+                  <li class="ui-win__row" data-row><img class="ui-avatar" src="img/t-A250003.jpg" alt="" width="1024" height="76"><span class="ui-win__who">A250003</span><span class="ui-win__sub">A250003/1.jpg</span><span class="ui-win__st is-done" data-st>Selesai</span><span class="ui-win__age">99,7%</span></li>
+                  <li class="ui-win__row" data-row><img class="ui-avatar" src="img/t-A250009.jpg" alt="" width="1024" height="93"><span class="ui-win__who">A250009</span><span class="ui-win__sub">A250009/1.jpg</span><span class="ui-win__st is-done" data-st>Selesai</span><span class="ui-win__age">99,6%</span></li>
+                  <li class="ui-win__row" data-row><img class="ui-avatar" src="img/t-A250038.jpg" alt="" width="1024" height="38"><span class="ui-win__who">A250038</span><span class="ui-win__sub">A250038/1.jpg</span><span class="ui-win__st is-done" data-st>Selesai</span><span class="ui-win__age">99,8%</span></li>
+                  <li class="ui-win__row" data-row><img class="ui-avatar" src="img/t-A250040.jpg" alt="" width="1024" height="20"><span class="ui-win__who">A250040</span><span class="ui-win__sub">A250040/1.jpg</span><span class="ui-win__st is-done" data-st>Selesai</span><span class="ui-win__age">100,0%</span></li>
+                  <li class="ui-win__row" data-row><img class="ui-avatar" src="img/t-A250042.jpg" alt="" width="1024" height="41"><span class="ui-win__who">A250042</span><span class="ui-win__sub">A250042/1.jpg</span><span class="ui-win__st is-done" data-st>Selesai</span><span class="ui-win__age">99,6%</span></li>
+                  <li class="ui-win__row" data-row><img class="ui-avatar" src="img/t-A240008.jpg" alt="" width="1024" height="61"><span class="ui-win__who">A240008</span><span class="ui-win__sub">A240008/1.jpg</span><span class="ui-win__st is-done" data-st>Selesai</span><span class="ui-win__age">99,98%</span></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="app__pane app__pane--open">
+          <div class="ui ui-panel rs">
+            <div class="rs__head">
+              <span class="ui-title">A240089/3.jpg</span>
+              <span class="ui-sep" aria-hidden="true"></span>
+              <span class="ui-meta">1024 x 58 piksel</span>
+              <span class="ui-spacer"></span>
+              <span class="ui-chip ui-chip--plain">Di atas ambang</span>
+            </div>
+            <div class="rs__body">
+              <div class="rs__shot"><img src="img/baca-A240089.jpg" alt="Baris tulisan tangan yang sedang diperiksa" width="1024" height="58"></div>
+              <div class="rs__top"><span class="rs__name">A240089</span><span class="rs__pct">keyakinan 99,69%, ambang 40,23%</span></div>
+              <div class="rs__rows">
+                <div class="rs__row"><span>A240089</span><span class="rs__bar"><i style="--v: 100%"></i></span><span>99,69%</span></div>
+                <div class="rs__row"><span>A250046</span><span class="rs__bar"><i style="--v: 6%"></i></span><span>0,03%</span></div>
+                <div class="rs__row"><span>A250048</span><span class="rs__bar"><i style="--v: 5%"></i></span><span>0,02%</span></div>
+                <div class="rs__row"><span>A220199</span><span class="rs__bar"><i style="--v: 5%"></i></span><span>0,02%</span></div>
+                <div class="rs__row"><span>A250025</span><span class="rs__bar"><i style="--v: 4%"></i></span><span>0,01%</span></div>
+              </div>
+              <div class="rs__shot"><img src="img/gradcam-A220199.png" alt="Peta Grad-CAM: bagian baris yang paling menentukan tebakan" width="1024" height="128" loading="lazy"></div>
+              <div class="rs__note"><i>1</i><span>Gerbang mutu lolos: rasio tinta <b>0,11</b></span></div>
+              <div class="rs__note"><i>2</i><span>Kanvas <b>128 x 1024</b>, rata kiri di atas putih</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="cara" style="--h: 2" data-moment="pinned-chapters" aria-labelledby="cara-h">
+    <div class="wrap mo-pc__grid">
+      <div class="mo-pc__text">
+        <h2 id="cara-h">Tiga langkah dari gambar ke penulis</h2>
+        <ol class="mo-pc__steps">
+          <li class="mo-pc__step">
+            <h3>Menolak tulisan yang tak terbaca</h3>
+            <p>Rasio tinta, ketajaman, dan kontras diukur lebih dulu. Batasnya diambil dari 2.658 gambar dataset, bukan dikira-kira.</p>
+            <figure class="mo-pc__visual mo-pc__visual--lit">
+              <div class="shot">
+                <div class="shot__bar">A220199/2.jpg &middot; 1014 x 128</div>
+                <img src="img/cara-1-A220199.jpg" alt="Baris tulisan tangan apa adanya, sebelum diproses" width="1014" height="128" loading="lazy">
+              </div>
+            </figure>
+          </li>
+          <li class="mo-pc__step">
+            <h3>Menempel ke kanvas 128 x 1024</h3>
+            <p>Tingginya dijadikan 128 piksel dengan rasio tetap, sisa kanvas diisi putih. Satu piksel berbeda di sini sudah mengubah tebakan.</p>
+            <figure class="mo-pc__visual mo-pc__visual--lit">
+              <div class="shot">
+                <div class="shot__bar">praproses &middot; 1024 x 128, rata kiri</div>
+                <img src="img/praproses-A220199.jpg" alt="Baris yang sama setelah diskalakan dan ditempel di kanvas putih 1024 kali 128 piksel" width="1024" height="128" loading="lazy">
+              </div>
+            </figure>
+          </li>
+          <li class="mo-pc__step">
+            <h3>Membagi peluang ke 50 penulis</h3>
+            <p>ResNet18 memberi satu peluang per penulis. Grad-CAM menandai bagian baris yang paling menentukan tebakan itu.</p>
+            <figure class="mo-pc__visual mo-pc__visual--lit">
+              <div class="shot">
+                <div class="shot__bar">Grad-CAM &middot; A220199, 99,56%</div>
+                <img src="img/gradcam-A220199.png" alt="Peta panas di atas baris yang sama, paling terang pada beberapa huruf" width="1024" height="128" loading="lazy">
+              </div>
+            </figure>
+          </li>
+        </ol>
+      </div>
+      <div class="mo-pc__visuals frame"></div>
+    </div>
+  </section>
+
+  <section class="section" id="hasil" aria-labelledby="hasil-h">
+    <div class="wrap">
+      <div class="grid grid--top">
+        <h2 class="span-5" id="hasil-h">Empat model pada 532 gambar uji</h2>
+        <div class="span-6 start-7">
+          <p>Rata-rata lima eksperimen 5-fold pada 532 gambar yang tidak pernah dilatihkan. Bobot halaman ini fold 1 ResNet18 di CPU: akurasi 0,9850, F1 0,9848.</p>
+        </div>
+      </div>
+      <div class="grid grid--top fill">
+        <ul class="rows span-5">
+          <li><span class="rows__name">ResNet18</span><p>F1 0,9807 &middot; 316 detik satu fold</p><span class="rows__value">0,9808</span></li>
+          <li><span class="rows__name">SqueezeNet 1.1</span><p>F1 0,9391 &middot; 249 detik satu fold</p><span class="rows__value">0,9398</span></li>
+          <li><span class="rows__name">LDA + GLCM</span><p>F1 0,8930 &middot; 0,07 detik satu fold</p><span class="rows__value">0,8944</span></li>
+          <li><span class="rows__name">Gaussian NB + GLCM</span><p>F1 0,2983 &middot; 0,004 detik satu fold</p><span class="rows__value">0,3338</span></li>
+        </ul>
+        <div class="frame frame--lit frame--fill span-6 start-7">
+          <div class="dg" data-diagram='{"layout":"hub","alt":"Satu crop 128 kali 1024 piksel masuk ke empat model: ResNet18 dan SqueezeNet membaca pikselnya, LDA dan Gaussian NB membaca 72 fitur tekstur GLCM.","ground":"none","center":{"label":"Satu crop","sub":"128 x 1024","icon":"ui:image"},"spokes":[{"label":"ResNet18","icon":"si:pytorch","sub":"piksel"},{"label":"SqueezeNet 1.1","icon":"si:pytorch","sub":"piksel"},{"label":"LDA + GLCM","icon":"si:scikitlearn","sub":"72 fitur"},{"label":"Gaussian NB + GLCM","icon":"si:scikitlearn","sub":"72 fitur"}],"motion":{"pulse":"none"}}'></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="data" aria-labelledby="data-h">
+    <div class="wrap">
+      <div class="grid grid--top">
+        <h2 class="span-5" id="data-h">Dari mana 2.658 crop itu</h2>
+        <div class="span-6 start-7">
+          <p>Tiap penulis menulis beberapa baris, lalu tiap baris dipotong jadi satu gambar. Potongannya panjang dan rendah, jadi yang dilihat model adalah bentuk huruf dan jarak antarkata, bukan kata yang tertulis.</p>
+        </div>
+      </div>
+      <div class="strip fill">
+        <img src="img/d-A250009.jpg" alt="Satu baris tulisan tangan penulis A250009" width="1024" height="64" loading="lazy">
+        <img src="img/d-A250038.jpg" alt="Satu baris tulisan tangan penulis A250038" width="1024" height="77" loading="lazy">
+        <img src="img/d-A240037.jpg" alt="Satu baris tulisan tangan penulis A240037" width="1024" height="67" loading="lazy">
+        <img src="img/d-A250001.jpg" alt="Satu baris tulisan tangan penulis A250001" width="1024" height="87" loading="lazy">
+        <img src="img/d-A250042.jpg" alt="Satu baris tulisan tangan penulis A250042" width="1024" height="69" loading="lazy">
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="batas" aria-labelledby="batas-h">
+    <div class="wrap">
+      <div class="grid grid--top fill">
+        <div class="span-5 stack-5">
+          <h2 id="batas-h">Hanya 50 penulis ini</h2>
+          <p class="t-lead">Model memilih di antara 50 penulis yang dilatihkan. Tulisan orang lain tetap dipaksa masuk ke salah satunya.</p>
+          <p>Di bawah ambang 0,4023 jawabannya jadi &ldquo;tidak dikenal&rdquo;. Pada 532 gambar uji, ambang itu menahan 10 gambar dan menyaring 4 dari 8 prediksi yang salah.</p>
+          <ul class="rows">
+            <li><span class="rows__name">Recall terendah</span><span class="rows__value">A250040, 0,820</span></li>
+            <li><span class="rows__name">Isi tulisan</span><span class="rows__value">tidak dibaca</span></li>
+          </ul>
+        </div>
+        <div class="frame frame--split frame--lit frame--fill span-6 start-7">
+          <div class="stage stage--fade-br">
+            <div class="at-corner fit" style="--fit-max: 420px; --ax: 56px; --ay: 56px">
+              <div class="ui ui-panel rs">
+                <div class="rs__head">
+                  <span class="ui-title">A250023/1.jpg</span>
+                  <span class="ui-sep" aria-hidden="true"></span>
+                  <span class="ui-meta">369 x 128 piksel</span>
+                  <span class="ui-spacer"></span>
+                  <span class="ui-chip ui-chip--plain">Keyakinan turun</span>
+                </div>
+                <div class="rs__body">
+                  <div class="rs__shot"><img src="img/batas-A250023.jpg" alt="Baris tulisan tangan pendek yang keyakinannya turun" width="369" height="128" loading="lazy"></div>
+                  <div class="rs__top"><span class="rs__name">A250023</span><span class="rs__pct">keyakinan 85,36%</span></div>
+                  <div class="rs__rows">
+                    <div class="rs__row"><span>A250023</span><span class="rs__bar"><i style="--v: 100%"></i></span><span>85,36%</span></div>
+                    <div class="rs__row"><span>A250035</span><span class="rs__bar"><i style="--v: 22%"></i></span><span>3,30%</span></div>
+                    <div class="rs__row"><span>A250005</span><span class="rs__bar"><i style="--v: 10%"></i></span><span>0,69%</span></div>
+                    <div class="rs__row"><span>A220199</span><span class="rs__bar"><i style="--v: 10%"></i></span><span>0,68%</span></div>
+                    <div class="rs__row"><span>A250002</span><span class="rs__bar"><i style="--v: 9%"></i></span><span>0,59%</span></div>
+                  </div>
+                  <div class="rs__note"><i>!</i><span>Baris pendek, <b>369 piksel</b>: makin sedikit tulisan, makin turun keyakinannya</span></div>
+                  <div class="rs__note"><i>2</i><span>Masih di atas ambang <b>0,4023</b>, jadi tetap dijawab</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="footer closing footer--dark ground-inverse" id="contact" aria-labelledby="close-h">
+  <div class="wrap">
+    <div class="closing__cta close--type">
+      <div class="section-head">
+        <h2 id="close-h">Unggah satu baris tulisan</h2>
+        <p class="t-small muted">Hasilnya keluar dalam hitungan detik, di mesin yang menjalankan halaman ini.</p>
+      </div>
+      <a class="btn btn--primary btn--xl btn--wide" href="alat.html">Unggah tulisan<svg class="m-arrow" viewBox="0 0 12 12" aria-hidden="true"><path class="m-arrow__stem" d="M1 6h8"/><path class="m-arrow__head" d="M4.5 2.5 8 6l-3.5 3.5"/></svg></a>
+    </div>
+    <div class="closing__links">
+      <div class="grid">
+        <div class="span-4 stack-4">
+          <a class="nav__logo" href="#top">Kenali Penulis</a>
+        </div>
+        <div class="span-2 start-7 footer__col"><h3>Prediksi</h3><ul><li><a href="#baca">Daftar prediksi</a></li><li><a href="alat.html">Unggah tulisan</a></li></ul></div>
+        <div class="span-2 start-9 footer__col"><h3>Cara</h3><ul><li><a href="#cara">Tiga langkah</a></li><li><a href="#data">Data latih</a></li></ul></div>
+        <div class="span-2 start-11 footer__col"><h3>Hasil</h3><ul><li><a href="#hasil">Empat model</a></li><li><a href="#batas">Batas model</a></li></ul></div>
+      </div>
+      <div class="footer__legal">
+        <span>&copy; 2026 Daffa Prawira 535220199</span>
+        <div class="socials"></div>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script type="module" src="assets/system.js"></script>
+<script type="module" src="assets/motion/motion.js"></script>
+<script type="module" src="assets/layout/layout.js"></script>
+<script type="module" src="assets/diagrams/mount.js"></script>
+</body>
+</html>

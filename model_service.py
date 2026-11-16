@@ -101,11 +101,16 @@ def prediksi(img_l, topk=5):
     siap = ubah_ukuran_dan_pad(img_l)
     x = ke_tensor(siap).to(DEVICE)
 
+    # _kunci: satu forward pass sekali waktu. Grad-CAM memasang hook di layer4 model
+    # yang sama; tanpa kunci, permintaan lain yang lewat saat hook terpasang bikin
+    # retain_grad() gagal di bawah no_grad (muat_model sudah dipanggil di atas, jadi
+    # kunci ini tidak pernah bersarang).
     peluang, tebakan = [], []
-    for _, m in daftar:
-        p = F.softmax(m(x), dim=1)[0]
-        peluang.append(p)
-        tebakan.append(int(p.argmax()))
+    with _kunci:
+        for _, m in daftar:
+            p = F.softmax(m(x), dim=1)[0]
+            peluang.append(p)
+            tebakan.append(int(p.argmax()))
 
     rata = torch.stack(peluang).mean(0)
     urut = torch.argsort(rata, descending=True)[:topk]
@@ -157,24 +162,27 @@ def gradcam(img_l, label_id=None):
     simpanan = {}
 
     def hook(_modul, _masuk, keluar):
+        if not keluar.requires_grad:
+            return
         keluar.retain_grad()
         simpanan['a'] = keluar
 
-    pegangan = m.layer4.register_forward_hook(hook)
-    try:
-        with torch.enable_grad():
-            keluaran = m(x)
-            if label_id is None:
-                label_id = int(keluaran.argmax())
+    with _kunci:
+        pegangan = m.layer4.register_forward_hook(hook)
+        try:
+            with torch.enable_grad():
+                keluaran = m(x)
+                if label_id is None:
+                    label_id = int(keluaran.argmax())
+                m.zero_grad(set_to_none=True)
+                keluaran[0, label_id].backward()
+                aktivasi = simpanan['a'][0]
+                gradien = simpanan['a'].grad[0]
+                bobot = gradien.mean(dim=(1, 2), keepdim=True)
+                peta = torch.relu((bobot * aktivasi).sum(0))
+        finally:
+            pegangan.remove()
             m.zero_grad(set_to_none=True)
-            keluaran[0, label_id].backward()
-            aktivasi = simpanan['a'][0]
-            gradien = simpanan['a'].grad[0]
-            bobot = gradien.mean(dim=(1, 2), keepdim=True)
-            peta = torch.relu((bobot * aktivasi).sum(0))
-    finally:
-        pegangan.remove()
-        m.zero_grad(set_to_none=True)
 
     peta = peta.detach().cpu().numpy()
     rentang = float(peta.max()) - float(peta.min())
